@@ -3,8 +3,12 @@ name = "ruthenium"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name="poc_auth"
+path="src/poc_auth.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ldap3_proto = "0.2.3"
-reqwest = "0.11.10"
+reqwest = { version="0.11.10", features=["blocking"] }
