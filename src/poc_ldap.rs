@@ -28,50 +28,13 @@ impl LdapSession {
         } else if sbr.dn == "cn=user01,ou=users,dc=example,dc=org" && sbr.pw == "user01" {
             self.dn = sbr.dn.to_string();
             sbr.gen_success()
+        } else if sbr.dn == "TEST" && sbr.pw == "TEST" {
+            self.dn = sbr.dn.to_string();
+            sbr.gen_success()
         } else {
             sbr.gen_invalid_cred()
         }
     }
-
-    // pub fn do_search(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
-    //     vec![
-    //         lsr.gen_result_entry(LdapSearchResultEntry {
-    //             dn: "cn=hello,dc=example,dc=com".to_string(),
-    //             attributes: vec![
-    //                 LdapPartialAttribute {
-    //                     atype: "objectClass".to_string(),
-    //                     vals: vec!["cursed".to_string()],
-    //                 },
-    //                 LdapPartialAttribute {
-    //                     atype: "cn".to_string(),
-    //                     vals: vec!["hello".to_string()],
-    //                 },
-    //                 LdapPartialAttribute {
-    //                     atype: "userPassword".to_string(),
-    //                     vals: vec!["hello".to_string()],
-    //                 }
-    //             ],
-    //         }),
-    //         lsr.gen_result_entry(LdapSearchResultEntry {
-    //             dn: "cn=world,dc=example,dc=com".to_string(),
-    //             attributes: vec![
-    //                 LdapPartialAttribute {
-    //                     atype: "objectClass".to_string(),
-    //                     vals: vec!["cursed".to_string()],
-    //                 },
-    //                 LdapPartialAttribute {
-    //                     atype: "cn".to_string(),
-    //                     vals: vec!["world".to_string()],
-    //                 },
-    //                 LdapPartialAttribute {
-    //                     atype: "userPassword".to_string(),
-    //                     vals: vec!["hello".to_string()],
-    //                 }
-    //             ],
-    //         }),
-    //         lsr.gen_success(),
-    //     ]
-    // }
 
     pub fn do_search(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
         println!("new request");
@@ -266,12 +229,12 @@ async fn acceptor(listener: Box<TcpListener>) {
 
 #[tokio::main]
 async fn main() -> () {
-    let addr = net::SocketAddr::from_str("127.0.0.1:12345").unwrap();
+    let addr = net::SocketAddr::from_str("0.0.0.0:12345").unwrap();
     let listener = Box::new(TcpListener::bind(&addr).await.unwrap());
 
     // Initiate the acceptor task.
     tokio::spawn(acceptor(listener));
 
-    println!("started ldap://127.0.0.1:12345 ...");
+    println!("started ldap://0.0.0.0:12345 ...");
     tokio::signal::ctrl_c().await.unwrap();
 }
