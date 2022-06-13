@@ -79,6 +79,10 @@ impl LdapSession {
                             atype: "subschemaSubentry".to_string(),
                             vals: vec!["cn=Subschema".to_string()]
                         },
+                        LdapPartialAttribute {
+                            atype: "structuralObjectClass".to_string(),
+                            vals: vec!["RutheniumLDAPRootDSE".to_string()]
+                        }
                     ]
                 }),
 
