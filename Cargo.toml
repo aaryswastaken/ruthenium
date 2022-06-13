@@ -11,6 +11,14 @@ path="src/poc_auth.rs"
 name="poc_ldap"
 path="src/poc_ldap.rs"
 
+[[bin]]
+name="poc_dbm"
+path="src/poc_dbm.rs"
+
+[[bin]]
+name="main"
+path="src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
