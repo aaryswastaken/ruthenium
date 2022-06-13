@@ -19,13 +19,33 @@ impl Whitelist {
         Whitelist{whitelisted: vec![], dc: "".to_string()}
     }
 
-    pub fn do_search(lsr: &SearchRequest) -> Vec<LdapMsg> {
-        return vec![];
+    pub fn do_search(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
+        let mut out: Vec<LdapMsg> = Vec::new();
+
+        for user in self.whitelisted.iter_mut() {
+            if format!("cn={},{}", user.username, self.dc) == lsr.base {
+                out.push(user.gen_ldap_msg(self.dc.to_string(), lsr));
+                break
+            }
+        }
+
+        out.push(lsr.gen_success());
+
+        return out
     }
 
     pub fn generate_ldap_entries(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
-        self.whitelisted.iter().map(|user| lsr.gen_result_entry(LdapSearchResultEntry {
-            dn: format!("cn={},{}", user.username, self.dc),
+        let mut out = self.whitelisted.iter_mut().map(|user| user.gen_ldap_msg(self.dc.to_string(), lsr)).collect::<Vec<LdapMsg>>();
+        out.push(lsr.gen_success());
+
+        return out;
+    }
+}
+
+impl User {
+    pub fn gen_ldap_msg(&mut self, dc: String, lsr: &SearchRequest) -> LdapMsg {
+        return lsr.gen_result_entry(LdapSearchResultEntry {
+            dn: format!("cn={},{}", self.username, dc),
             attributes: vec![
                 LdapPartialAttribute {
                     atype: "objectClass".to_string(),
@@ -33,22 +53,22 @@ impl Whitelist {
                 },
                 LdapPartialAttribute {
                     atype: "cn".to_string(),
-                    vals: vec![user.username.to_string()]
+                    vals: vec![self.username.to_string()]
                 },
                 LdapPartialAttribute {
                     atype: "gidNumber".to_string(),
-                    vals: vec![user.uid.to_string()]
+                    vals: vec![self.uid.to_string()]
                 },
                 LdapPartialAttribute {
                     atype: "uid".to_string(),
-                    vals: vec![user.username.to_string()]
+                    vals: vec![self.username.to_string()]
                 },
                 LdapPartialAttribute {
                     atype: "uidNumber".to_string(),
-                    vals: vec![user.uid.to_string()]
+                    vals: vec![self.uid.to_string()]
                 }
             ]
-        })).collect::<Vec<LdapMsg>>()
+        })
     }
 }
 

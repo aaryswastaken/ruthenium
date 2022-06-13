@@ -132,7 +132,7 @@ impl LdapSession {
                     ]
                 }), lsr.gen_success()],
             "ou=users,dc=example,dc=org" => self.wl.generate_ldap_entries(lsr), 
-            &_ => vec![lsr.gen_error(LdapResultCode::Unavailable, "Unsupported operation".to_string())]  
+            &_ => self.wl.do_search(lsr)
         };
 
         println!("Length of the response: {}", out.len());
