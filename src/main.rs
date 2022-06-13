@@ -20,8 +20,8 @@ pub struct LdapSession {
 
 fn fmt(filter: &LdapFilter) -> String{
     let s: String = match filter {
-        And(filters) => filters.iter().map(|e| fmt(e)).collect::<Vec<String>>().join(" AND "),
-        Or(filters)  => filters.iter().map(|e| fmt(e)).collect::<Vec<String>>().join(" OR "),
+        And(filters) => filters.iter().map(|e| format!("A{}", fmt(e))).collect::<Vec<String>>().join(" AND "),
+        Or(filters)  => filters.iter().map(|e| format!("O{}", fmt(e))).collect::<Vec<String>>().join(" OR "),
         Not(not) => format!("NOT {}", fmt(not)),
 
         Equality(str1, str2) => format!("{} == {}", str1, str2),
@@ -58,85 +58,126 @@ impl LdapSession {
     pub fn do_search(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
         println!("new request, {}, {}", lsr.base, fmt(&lsr.filter));
         
-        let out:Vec<LdapMsg> = match lsr.base.as_str() {
-            "" => vec![
-                lsr.gen_result_entry(LdapSearchResultEntry {
-                    dn: "".to_string(),
-                    attributes: vec![
-                        LdapPartialAttribute {
-                            atype: "objectClass".to_string(),
-                            vals: vec!["RutheniumLDAPRootDSE".to_string(),"top".to_string()]
-                        },
-                        LdapPartialAttribute {
-                            atype: "namingContexts".to_string(),
-                            vals: vec!["dc=example,dc=org".to_string()]
-                        },
-                        LdapPartialAttribute {
-                            atype: "entryDN".to_string(),
-                            vals: vec!["".to_string()]
-                        },
-                        LdapPartialAttribute {
-                            atype: "subschemaSubentry".to_string(),
-                            vals: vec!["cn=Subschema".to_string()]
-                        },
-                        LdapPartialAttribute {
-                            atype: "structuralObjectClass".to_string(),
-                            vals: vec!["RutheniumLDAPRootDSE".to_string()]
-                        }
-                    ]
-                }),
+        let out:Vec<LdapMsg> = match &lsr.filter {
+            Present(_req) => match lsr.base.as_str() {
+                "" => vec![
+                    lsr.gen_result_entry(LdapSearchResultEntry {
+                        dn: "".to_string(),
+                        attributes: vec![
+                            LdapPartialAttribute {
+                                atype: "objectClass".to_string(),
+                                vals: vec!["RutheniumLDAPRootDSE".to_string(),"top".to_string()]
+                            },
+                            LdapPartialAttribute {
+                                atype: "namingContexts".to_string(),
+                                vals: vec!["dc=example,dc=org".to_string()]
+                            },
+                            LdapPartialAttribute {
+                                atype: "entryDN".to_string(),
+                                vals: vec!["".to_string()]
+                            },
+                            LdapPartialAttribute {
+                                atype: "subschemaSubentry".to_string(),
+                                vals: vec!["cn=Subschema".to_string()]
+                            },
+                            LdapPartialAttribute {
+                                atype: "structuralObjectClass".to_string(),
+                                vals: vec!["RutheniumLDAPRootDSE".to_string()]
+                            }
+                        ]
+                    }),
 
-                lsr.gen_result_entry(LdapSearchResultEntry {
-                    dn: "dc=example,dc=org".to_string(),
-                    attributes: vec![
-                        LdapPartialAttribute {
-                            atype: "objectClass".to_string(),
-                            vals: vec!["dcObject".to_string(),"organization".to_string()]
-                        },
-                        LdapPartialAttribute {                     
-                            atype: "dc".to_string(),
-                            vals: vec!["example".to_string()],
-                        },
-                        LdapPartialAttribute {                     
-                            atype: "o".to_string(),
-                            vals: vec!["example".to_string()],
-                        },
-                    ]
-                }), lsr.gen_success()],
-            "dc=org" => vec![
-                lsr.gen_result_entry(LdapSearchResultEntry {
-                    dn: "dc=example,dc=org".to_string(),
-                    attributes: vec![
-                        LdapPartialAttribute {
-                            atype: "objectClass".to_string(),
-                            vals: vec!["dcObject".to_string(),"organization".to_string()]
-                        },
-                        LdapPartialAttribute {                     
-                            atype: "dc".to_string(),
-                            vals: vec!["example".to_string()],
-                        },
-                        LdapPartialAttribute {                     
-                            atype: "o".to_string(),
-                            vals: vec!["example".to_string()],
-                        },
-                    ]
-                }), lsr.gen_success()],
-            "dc=example,dc=org" => vec![
-                lsr.gen_result_entry(LdapSearchResultEntry {
-                    dn: "ou=users,dc=example,dc=org".to_string(),
-                    attributes: vec![
-                        LdapPartialAttribute {
-                            atype: "objectClass".to_string(),
-                            vals: vec!["organizationalUnit".to_string()]
-                        },
-                        LdapPartialAttribute {
-                            atype: "ou".to_string(),
-                            vals: vec!["users".to_string()]
-                        }
-                    ]
-                }), lsr.gen_success()],
-            "ou=users,dc=example,dc=org" => self.wl.generate_ldap_entries(lsr), 
-            &_ => self.wl.do_search(lsr)
+                    lsr.gen_result_entry(LdapSearchResultEntry {
+                        dn: "dc=example,dc=org".to_string(),
+                        attributes: vec![
+                            LdapPartialAttribute {
+                                atype: "objectClass".to_string(),
+                                vals: vec!["dcObject".to_string(),"organization".to_string()]
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "dc".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "o".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                        ]
+                    }), lsr.gen_success()],
+                "dc=org" => vec![
+                    lsr.gen_result_entry(LdapSearchResultEntry {
+                        dn: "dc=example,dc=org".to_string(),
+                        attributes: vec![
+                            LdapPartialAttribute {
+                                atype: "objectClass".to_string(),
+                                vals: vec!["dcObject".to_string(),"organization".to_string()]
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "dc".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "o".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                        ]
+                    }), lsr.gen_success()],
+                "dc=example,dc=org" => vec![
+                    lsr.gen_result_entry(LdapSearchResultEntry {
+                        dn: "dc=example,dc=org".to_string(),
+                        attributes: vec![
+                            LdapPartialAttribute {
+                                atype: "objectClass".to_string(),
+                                vals: vec!["dcObject".to_string(),"organization".to_string()]
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "dc".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                            LdapPartialAttribute {                     
+                                atype: "o".to_string(),
+                                vals: vec!["example".to_string()],
+                            },
+                        ]
+                    }),
+                    lsr.gen_result_entry(LdapSearchResultEntry {
+                        dn: "ou=users,dc=example,dc=org".to_string(),
+                        attributes: vec![
+                            LdapPartialAttribute {
+                                atype: "objectClass".to_string(),
+                                vals: vec!["organizationalUnit".to_string()]
+                            },
+                            LdapPartialAttribute {
+                                atype: "ou".to_string(),
+                                vals: vec!["users".to_string()]
+                            }
+                        ]
+                    }), lsr.gen_success()],
+                "ou=users,dc=example,dc=org" => {
+                    let mut out: Vec<LdapMsg> = Vec::new();
+                        out.push(
+                            lsr.gen_result_entry(LdapSearchResultEntry {
+                                dn: "ou=users,dc=example,dc=org".to_string(),
+                                attributes: vec![
+                                    LdapPartialAttribute {
+                                        atype: "objectClass".to_string(),
+                                        vals: vec!["organizationalUnit".to_string()]
+                                    },
+                                    LdapPartialAttribute {
+                                        atype: "ou".to_string(),
+                                        vals: vec!["users".to_string()]
+                                    }
+                                ]
+                        }));
+
+                    out.append(&mut self.wl.generate_ldap_entries(lsr));
+
+                    return out
+                }, 
+                &_ => self.wl.do_search(lsr)
+            },
+
+            _ => self.wl.do_search(lsr)
         };
 
         println!("Length of the response: {}", out.len());
@@ -224,6 +265,6 @@ async fn main() -> () {
     // Initiate the acceptor task.
     tokio::spawn(acceptor(listener));
 
-    println!("started ldap://0.0.0.0:12345 ...");
+    println!("PROD =============== started ldap://0.0.0.0:12345 ...");
     tokio::signal::ctrl_c().await.unwrap();
 }
