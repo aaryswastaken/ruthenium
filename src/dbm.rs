@@ -60,11 +60,8 @@ impl DynamicObject for User {
 
 impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
     fn has_base(&mut self, base: &String) -> bool {
-        // let base_split = base.split(',').into_iter().rev();
-        // let self_dn_split:Vec<&str> = self.dn.split(',').into_iter().rev().collect();
-
-        // return base_split.enumerate().all(|(id, base)| self_dn_split[id] == base);
-        return self.dn == base.clone() || (self.dn.split(",").collect::<Vec<&str>>().len() == base.split(",").collect::<Vec<&str>>().len() + 1 && self.dn.contains(base))
+        // return self.dn == base.clone() || (self.dn.split(",").collect::<Vec<&str>>().len() == base.split(",").collect::<Vec<&str>>().len() + 1 && self.dn.contains(base))
+        return self.dn.contains(base);
     }
 
     fn matches_filter(&mut self, filter: &LdapFilter) -> bool {
@@ -74,8 +71,15 @@ impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
             Not(not) => !self.matches_filter(&not),
 
             Equality(str1, str2) => {
+                println!("Testing {} for {} attribute", self.dn, &str1);
+
                 if self.has_attribute(&str1) {
-                    self.get_attribute(&str1).contains(str2)
+                    println!("{} has it", self.dn);
+                    if self.get_attribute(&str1).contains(str2) {
+                        println!("Returns true"); true
+                    } else {
+                        println!("Returns false"); false
+                    }
                 } else {
                     false
                 }},
@@ -86,11 +90,11 @@ impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
     }
 
     fn has_attribute(&mut self, attribute_name: &String) -> bool {
-        self.attributes.clone().into_iter().any(|attribute| attribute.atype == attribute_name.clone())
+        self.attributes.clone().into_iter().any(|attribute| attribute.atype.to_ascii_lowercase() == attribute_name.to_ascii_lowercase())
     }
 
     fn get_attribute(&mut self, attribute_name: &String) -> Vec<String> {
-        self.attributes.clone().into_iter().filter(|attribute| attribute.atype == attribute_name.clone()).map(|a| a.vals).flatten().collect::<Vec<String>>()
+        self.attributes.clone().into_iter().filter(|attribute| attribute.atype.to_ascii_lowercase() == attribute_name.to_ascii_lowercase()).map(|a| a.vals).flatten().collect::<Vec<String>>()
     }
 }
 
