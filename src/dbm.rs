@@ -64,7 +64,7 @@ impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
         // let self_dn_split:Vec<&str> = self.dn.split(',').into_iter().rev().collect();
 
         // return base_split.enumerate().all(|(id, base)| self_dn_split[id] == base);
-        return self.dn.contains(base);
+        return self.dn == base.clone() || (self.dn.split(",").collect::<Vec<String>>().len() == base.split(",").collect::<Vec<String>>().len() + 1 && self.dn.contains(base))
     }
 
     fn matches_filter(&mut self, filter: &LdapFilter) -> bool {
