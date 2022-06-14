@@ -31,7 +31,7 @@ pub trait ExtendedLdapSearchResultEntry {
 impl DynamicObject for User {
     fn get_ldap_entry(&mut self, dc: &String) -> LdapSearchResultEntry {
         LdapSearchResultEntry {
-            dn: format!("cn={},{}", self.username, dc),
+            dn: format!("cn={},ou=users,{}", self.username, dc),
             attributes: vec![
                 LdapPartialAttribute {
                     atype: "objectClass".to_string(),
@@ -64,7 +64,7 @@ impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
         // let self_dn_split:Vec<&str> = self.dn.split(',').into_iter().rev().collect();
 
         // return base_split.enumerate().all(|(id, base)| self_dn_split[id] == base);
-        return self.dn == base.clone() || (self.dn.split(",").collect::<Vec<String>>().len() == base.split(",").collect::<Vec<String>>().len() + 1 && self.dn.contains(base))
+        return self.dn == base.clone() || (self.dn.split(",").collect::<Vec<&str>>().len() == base.split(",").collect::<Vec<&str>>().len() + 1 && self.dn.contains(base))
     }
 
     fn matches_filter(&mut self, filter: &LdapFilter) -> bool {
@@ -129,7 +129,7 @@ impl ObjectManager {
     pub fn initialise(filename: String, dc: String) -> ObjectManager {
         let mut instance = ObjectManager::new(dc.clone());
 
-        instance.dynamic_objects = Whitelist::read_from_file(filename, dc).whitelisted;
+        instance.dynamic_objects = Whitelist::read_from_file(filename, dc.clone()).whitelisted;
 
         instance.static_objects = vec![
             LdapSearchResultEntry {
@@ -158,7 +158,7 @@ impl ObjectManager {
                 ]
             },
             LdapSearchResultEntry {
-                dn: "dc=example,dc=org".to_string(),
+                dn: dc.clone(),
                 attributes: vec![
                     LdapPartialAttribute {
                         atype: "objectClass".to_string(),
@@ -175,7 +175,7 @@ impl ObjectManager {
                 ]
             },
             LdapSearchResultEntry {
-                dn: "ou=users,dc=example,dc=org".to_string(),
+                dn: format!("ou=users,{}", dc.clone()),
                 attributes: vec![
                     LdapPartialAttribute {
                         atype: "objectClass".to_string(),
