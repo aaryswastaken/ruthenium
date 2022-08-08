@@ -2,13 +2,14 @@
 
 use std::fs;
 
+use ldap3_proto::proto::LdapSearchRequest;
 use ldap3_proto::simple::*;
 use ldap3_proto::simple::LdapFilter::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Whitelist {
     pub whitelisted: Vec<User>,
-    pub dc: String
+    pub dn: String
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +19,7 @@ pub struct User {
 }
 
 pub trait DynamicObject {
-    fn get_ldap_entry(&mut self, dc: &String) -> LdapSearchResultEntry;
+    fn get_ldap_entry(&self, ou: &String, dn: &String) -> LdapSearchResultEntry;
 }
 
 pub trait ExtendedLdapSearchResultEntry {
@@ -29,9 +30,9 @@ pub trait ExtendedLdapSearchResultEntry {
 }
 
 impl DynamicObject for User {
-    fn get_ldap_entry(&mut self, dc: &String) -> LdapSearchResultEntry {
+    fn get_ldap_entry(&self, ou: &String, dn: &String) -> LdapSearchResultEntry {
         LdapSearchResultEntry {
-            dn: format!("cn={},ou=users,{}", self.username, dc),
+            dn: format!("cn={},ou={},{}", self.username, ou, dn),
             attributes: vec![
                 LdapPartialAttribute {
                     atype: "objectClass".to_string(),
@@ -99,20 +100,21 @@ impl ExtendedLdapSearchResultEntry for LdapSearchResultEntry {
 }
 
 pub struct ObjectManager {
-    pub dc: String,
-    pub static_objects: Vec<LdapSearchResultEntry>,
+    pub dn: String,
+    pub ou: String,
+    pub users_dn: String,
     pub dynamic_objects: Vec<User> // need to do this procedurally for every struct implementing DynamicObject trat
 }
 
 impl Whitelist {
     pub fn new() -> Whitelist{
-        Whitelist{whitelisted: vec![], dc: "".to_string()}
+        Whitelist{whitelisted: vec![], dn: "".to_string()}
     }
 
-    pub fn read_from_file(filename: String, dc: String) -> Whitelist {
+    pub fn read_from_file(filename: String, dn: String) -> Whitelist {
         let content = fs::read_to_string(filename).expect("Something went wrong while trying to read the file");
     
-        let whitelist = Whitelist{whitelisted: content.lines().enumerate().map(|(uid, name)| User{username: name.to_string(), uid: uid as i64}).collect::<Vec<User>>(), dc: dc};
+        let whitelist = Whitelist{whitelisted: content.lines().enumerate().map(|(uid, name)| User{username: name.to_string(), uid: uid as i64}).collect::<Vec<User>>(), dn: dn};
     
         return whitelist
     }
@@ -122,99 +124,37 @@ impl User {
 }
 
 impl ObjectManager {
-    pub fn new(dc: String) -> ObjectManager {
+    pub fn new(dn: String, ou: String) -> ObjectManager {
         ObjectManager {
-            dc: dc,
-            static_objects: vec![],
+            dn: dn.to_owned(),
+            ou: ou.to_owned(),
+            users_dn: format!("ou={},{}", &ou, &dn),
             dynamic_objects: vec![]
         }
     }
 
-    pub fn initialise(filename: String, dc: String) -> ObjectManager {
-        let mut instance = ObjectManager::new(dc.clone());
+    pub fn initialise(filename: String, dc: String, ou: String) -> ObjectManager {
+        let mut instance = ObjectManager::new(dc.to_owned(), ou.to_owned());
 
         instance.dynamic_objects = Whitelist::read_from_file(filename, dc.clone()).whitelisted;
-
-        instance.static_objects = vec![
-            LdapSearchResultEntry {
-                dn: "".to_string(),
-                attributes: vec![
-                    LdapPartialAttribute {
-                        atype: "objectClass".to_string(),
-                        vals: vec!["RutheniumLDAPRootDSE".to_string(),"top".to_string()]
-                    },
-                    LdapPartialAttribute {
-                        atype: "namingContexts".to_string(),
-                        vals: vec!["dc=example,dc=org".to_string()]
-                    },
-                    LdapPartialAttribute {
-                        atype: "entryDN".to_string(),
-                        vals: vec!["".to_string()]
-                    },
-                    LdapPartialAttribute {
-                        atype: "subschemaSubentry".to_string(),
-                        vals: vec!["cn=Subschema".to_string()]
-                    },
-                    LdapPartialAttribute {
-                        atype: "structuralObjectClass".to_string(),
-                        vals: vec!["RutheniumLDAPRootDSE".to_string()]
-                    }
-                ]
-            },
-            LdapSearchResultEntry {
-                dn: dc.clone(),
-                attributes: vec![
-                    LdapPartialAttribute {
-                        atype: "objectClass".to_string(),
-                        vals: vec!["dcObject".to_string(),"organization".to_string()]
-                    },
-                    LdapPartialAttribute {                     
-                        atype: "dc".to_string(),
-                        vals: vec!["example".to_string()],
-                    },
-                    LdapPartialAttribute {                     
-                        atype: "o".to_string(),
-                        vals: vec!["example".to_string()],
-                    },
-                ]
-            },
-            LdapSearchResultEntry {
-                dn: format!("ou=users,{}", dc.clone()),
-                attributes: vec![
-                    LdapPartialAttribute {
-                        atype: "objectClass".to_string(),
-                        vals: vec!["organizationalUnit".to_string()]
-                    },
-                    LdapPartialAttribute {
-                        atype: "ou".to_string(),
-                        vals: vec!["users".to_string()]
-                    }
-                ]
-            }
-        ];
 
         return instance;
     }
 
-    pub fn do_search(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
-        let mut results: Vec<LdapSearchResultEntry> = Vec::new();
+    pub fn get_all_ldap_entries(&mut self, lsr: &SearchRequest) -> Vec<LdapMsg> {
+        return self.dynamic_objects.clone().iter_mut().map(|e| lsr.gen_result_entry(e.get_ldap_entry(&self.ou, &self.dn))).collect::<Vec<LdapMsg>>();
+    }
 
-        let mut objects: Vec<LdapSearchResultEntry> = self.static_objects.clone();
-        let dyn_objects: Vec<User> = self.dynamic_objects.clone();
-        objects.append(&mut (dyn_objects.into_iter().map(|mut dyn_o| dyn_o.get_ldap_entry(&self.dc)).collect::<Vec<LdapSearchResultEntry>>()));
-
-        // fill the result vector
-        for mut o in objects.into_iter() {
-            if o.has_base(&lsr.base) && o.matches_filter(&lsr.filter) {
-                results.push(o.clone());
+    pub fn fetch_user_from_dn(&mut self, dn: &String) -> Option<User> {
+        // This piece of code is disgusting, please read it at your own risk
+        // Eye cleaning solution is recommended
+        
+        for user in self.dynamic_objects.clone().into_iter() {
+            if user.get_ldap_entry(&self.ou, &self.dn).dn == *dn {
+                return Some(user.clone())
             }
         }
 
-        println!("Finished query with: {}", results.clone().iter().map(|e| if e.dn == "" {"Empty".to_string()} else {e.dn.clone()}).collect::<Vec<String>>().join(" & "));
-
-        let mut out = results.iter().map(|e| lsr.gen_result_entry(e.clone())).collect::<Vec<LdapMsg>>();
-        out.push(lsr.gen_success());
-
-        return out;
+        None
     }
 }

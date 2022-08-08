@@ -3,8 +3,6 @@ use reqwest::blocking::Client;
 fn main() {
     let client = Client::new();
 
-    let pwd:Option<String> = Some("--- REDACTED ---".to_string());
-
     let res = client
         .post("https://plex.tv/users/sign_in.xml")
         .header("X-Plex-Device", "RutheniumProxy")
@@ -15,13 +13,13 @@ fn main() {
         .header("X-Plex-Client-Profile-Extra", "add-transcode-target(type=MusicProfile&context=streaming&protocol=hls&container=mpegts&audioCodec=aac)+add-transcode-target(type=videoProfile&context=streaming&protocol=hls&container=mpegts&videoCodec=h264&audioCodec=aac,mp3&replace=true)")
         .header("X-Plex-Product", "PlexConnect")
         .header("X-Plex-Version", "1.0.0")
-        .basic_auth("--- REDACTED ---", pwd)
+        .basic_auth(" --- redacted --- ", Some(" --- redacted --- ".to_string()))
         .send();
     
     match res {
         Ok(response) => {
             if response.status().is_success() {
-                println!("{}", response.text().unwrap())
+                println!("Ok")
             } else {
                 println!("Request status: {}", response.status());
             }
