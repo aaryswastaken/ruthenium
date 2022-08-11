@@ -1,3 +1,4 @@
+use ldap3_proto::proto::LdapOp;
 use tokio::net::{TcpListener, TcpStream};
 // use tokio::stream::StreamExt;
 use futures::SinkExt;
@@ -45,7 +46,7 @@ async fn authenticate(client: &Client, username: String, password: String) -> Re
                 return Err(AuthError)
             }
         },
-        Err(e) => return Err(AuthError)
+        Err(_e) => return Err(AuthError)
     }
 }
 
@@ -159,7 +160,7 @@ impl LdapSession {
                 out = vec![lsr.gen_result_entry(LdapSearchResultEntry {
                     dn: self.manager.users_dn.to_owned(),
                     attributes: filter_attrs(&lsr.attrs, &self.ou_attrs)
-                })];
+                }), lsr.gen_success()];
             } else if lsr.base.contains(&self.manager.dn) {
                 // Is a subtree, probably a user
 
@@ -176,16 +177,35 @@ impl LdapSession {
             }
         } else if lsr.scope == LdapSearchScope::OneLevel {
             // Client would want to know the children of ...
-            if lsr.base == self.manager.dn {
-                // our dn (sending our ou=users)
-                out = vec![lsr.gen_result_entry(LdapSearchResultEntry {
-                    dn: self.manager.users_dn.to_owned(),
-                    attributes: filter_attrs(&lsr.attrs, &self.ou_attrs)
-                }), lsr.gen_success()];
+            if lsr.base.is_empty() {
+                // sending root 
+                let new_lsr = SearchRequest {msgid: lsr.msgid, base: self.manager.dn.to_owned(), scope: LdapSearchScope::Base, filter: lsr.filter.to_owned(), attrs: lsr.attrs.to_owned()};
+                out = self.do_search(&new_lsr);
+            } else if lsr.base == self.manager.dn {
+                // our dn (sending our ou=users because it's the child)
+                let new_lsr = SearchRequest {msgid: lsr.msgid, base: self.manager.users_dn.to_owned(), scope: LdapSearchScope::Base, filter: lsr.filter.to_owned(), attrs: lsr.attrs.to_owned()};
+                out = self.do_search(&new_lsr);
             } else if lsr.base == self.manager.users_dn {
                 // out ou (sending users)
                 out = self.manager.get_all_ldap_entries(lsr);
                 out.push(lsr.gen_success());
+            } else if lsr.base.contains(&self.manager.users_dn) {
+                out = match self.manager.fetch_user_from_dn(&lsr.base) {
+                    Some(_user) => vec![lsr.gen_success()], // there is nothing to show but no error neither
+                    None => vec![lsr.gen_error(LdapResultCode::NoSuchObject, "This object doesn't exists".to_string())] // there is no object so no sub objects
+                };
+            } else {
+                out = vec![lsr.gen_error(LdapResultCode::NoSuchObject, "This object doesn't exists".to_string())];
+            }
+        } else if lsr.scope == LdapSearchScope::Subtree {
+            // That's the part where the headache begins
+
+            out = self.do_rescursive_search(lsr, 0);
+
+            if out.len() > 0 {
+                out.push(lsr.gen_success());
+            } else {
+                out.push(lsr.gen_error(LdapResultCode::NoSuchObject, "This is embarassing".to_string()));
             }
         } else {
             println!("PANIC");
@@ -197,6 +217,68 @@ impl LdapSession {
         if out.len() == 0 {
             println!("DID I JUST SAID 0??? PANIC !!!!!!");  // lol
             out = vec![lsr.gen_error(LdapResultCode::OperationsError, "This is kinda embarassing...".to_string())];
+        }
+
+        return out;
+    }
+
+    fn do_rescursive_search(&mut self, lsr: &SearchRequest, depth: i32) -> Vec<LdapMsg> {
+        if depth > 10 {
+            println!("Max depth has been reached, exiting");
+            return vec![];
+        }
+
+        let mut temp:Vec<LdapSearchResultEntry> = Vec::new();
+
+        let mut new_lsr = lsr.clone();
+        new_lsr.scope = LdapSearchScope::OneLevel;
+        let next_level = self.do_search(&new_lsr);
+
+        let mut abort: bool = false;
+
+        if next_level.len() > 0 {
+            for result in next_level.into_iter() {
+                match result.op { // there is a problem in borrowing here
+                    LdapOp::SearchResultEntry(entry) => {
+                        temp.push(entry);
+                    },
+                    LdapOp::SearchResultDone(res) => {
+                        match res.code {
+                            LdapResultCode::Success => {
+                                // do nothing lol
+                            },
+                            _ => {
+                                abort = true; // There is an error we don't need to process the information
+                            }
+                        };
+                    },
+                    _ => {
+                        // hmmmmmm
+                        abort = true;
+                        println!("There is something strange here kinda sus ngl");
+                    }
+                }
+            }
+        } else {
+            // ++++++++++++++++ PANIK ++++++++++++++++
+            println!("Panix please elp");
+            abort = true; // lol
+        }
+
+        let mut out = Vec::new();
+
+        if !abort {
+            for entry in temp.into_iter() {
+                out.push(lsr.gen_result_entry(entry.clone()));
+
+                let mut new_lsr = lsr.clone();
+                new_lsr.base = entry.dn;
+
+                println!("Going one level deeper with {}", &new_lsr.base);
+                out.append(&mut self.do_rescursive_search(&new_lsr, depth + 1));
+            }   
+        } else {
+            println!("Aborting on recursive search (dn: {}, depth: {})", &lsr.base, depth);
         }
 
         return out;
