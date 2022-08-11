@@ -6,6 +6,7 @@ use futures::StreamExt;
 use std::convert::TryFrom;
 use std::net;
 use std::str::FromStr;
+use std::vec;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 use ldap3_proto::simple::*;
@@ -219,7 +220,48 @@ impl LdapSession {
             out = vec![lsr.gen_error(LdapResultCode::OperationsError, "This is kinda embarassing...".to_string())];
         }
 
+        return self.apply_filter(out, &lsr.filter);
+    }
+
+    fn apply_filter(&mut self, msgs: Vec<LdapMsg>, filter: &LdapFilter) -> Vec<LdapMsg> {
+        let mut out: Vec<LdapMsg> = Vec::new();
+
+        for msg in msgs.into_iter() {
+            match msg.clone().op {
+                LdapOp::SearchResultEntry(entry) => {
+                    if self.does_result_matches_filter(&entry, filter) {
+                        out.push(msg);
+                    }
+                }
+                _ => {
+                    out.push(msg);
+                }
+            }
+        }
+
         return out;
+    }
+
+    // Another reccursive funtion LOL
+    fn does_result_matches_filter(&mut self, entry: &LdapSearchResultEntry, root_filter: &LdapFilter) -> bool {
+        match root_filter {
+            And(filters) => filters.iter().all(|f| self.does_result_matches_filter(entry, f)),
+            Or(filters) => filters.iter().any(|f| self.does_result_matches_filter(entry, f)),
+            Not(filter) => !self.does_result_matches_filter(entry, filter),
+            Equality(str_a, str_b) => entry.attributes.iter().filter(|attr| attr.atype == *str_a).any(|attr| attr.vals.iter().any(|val| val == str_b)),
+            Substring(str, substr_filter) => {
+                return match &substr_filter.initial {
+                    Some(s) => str.starts_with(s),
+                    None => true
+                } && match &substr_filter.final_ {
+                    Some(s) => str.ends_with(s),
+                    None => true
+                } && substr_filter.any.clone().into_iter().any(|s| str.contains(&s));
+            },
+            //GE
+            //LE
+            Present(str_a) => entry.attributes.clone().into_iter().any(|attr| attr.atype == *str_a),
+        }
     }
 
     fn do_rescursive_search(&mut self, lsr: &SearchRequest, depth: i32) -> Vec<LdapMsg> {
